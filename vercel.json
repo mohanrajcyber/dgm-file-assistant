@@ -1,6 +1,6 @@
 {
-  "buildCommand": null,
-  "installCommand": null,
+  "buildCommand": "",
+  "installCommand": "",
   "outputDirectory": ".",
   "rewrites": [
     { "source": "/", "destination": "/dgm_file_assistant.html" }
