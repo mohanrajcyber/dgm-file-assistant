@@ -1,0 +1,11 @@
+{
+  "name": "DGM File Assistant",
+  "short_name": "DGM Agent",
+  "start_url": "./dgm_file_assistant.html",
+  "display": "standalone",
+  "background_color": "#f0f2f5",
+  "theme_color": "#0f2d52",
+  "icons": [
+    { "src": "icon.ico", "sizes": "32x32", "type": "image/x-icon" }
+  ]
+}

@@ -1,0 +1,1098 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DGM File Assistant</title>
+<meta name="theme-color" content="#0f2d52">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#f0f2f5;--app:#fff;--header:#0f2d52;--chat:#f8f9fb;--bubble-ai:#fff;--bubble-user:#0f2d52;--border:#d1d9e6;--text:#1e2938;--sub:#64748b;--input:#f8f9fb}
+[data-theme="dark"]{--bg:#0d1117;--app:#161b22;--header:#0a1929;--chat:#0d1117;--bubble-ai:#1c2333;--bubble-user:#1a56db;--border:#30363d;--text:#e6edf3;--sub:#8b949e;--input:#21262d}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:0}
+#app{width:100%;height:100vh;background:var(--app);display:flex;flex-direction:column;overflow:hidden}
+.header{background:var(--header);padding:10px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0;flex-wrap:wrap}
+.logo{width:34px;height:34px;background:rgba(255,255,255,0.15);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.logo svg{width:18px;height:18px;fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.header-text h1{font-size:14px;font-weight:600;color:#fff}
+.header-text p{font-size:11px;color:rgba(255,255,255,0.6)}
+.hbtns{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap}
+.hbtn{background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.25);border-radius:16px;padding:3px 10px;font-size:11px;color:#fff;cursor:pointer;white-space:nowrap;transition:background 0.2s}
+.hbtn:hover{background:rgba(255,255,255,0.25)}
+.hbtn.active{background:rgba(255,200,0,0.3);border-color:rgba(255,200,0,0.5)}
+.api-status{display:inline-block;width:7px;height:7px;border-radius:50%;background:#22c55e;margin-right:3px;vertical-align:middle}
+.api-status.warn{background:#f59e0b}
+.api-status.err{background:#ef4444}
+.chat-area{flex:1;overflow-y:auto;overflow-x:hidden;padding:16px;display:flex;flex-direction:column;gap:12px;background:var(--chat);scroll-behavior:smooth}
+.chat-area::-webkit-scrollbar{width:4px}
+.chat-area::-webkit-scrollbar-thumb{background:#d0d5de;border-radius:10px}
+.msg{display:flex;gap:8px;align-items:flex-start;width:100%;min-width:0}
+.msg.user{flex-direction:row-reverse}
+.avatar{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;flex-shrink:0}
+.avatar.ai{background:var(--header);color:#fff}
+.avatar.user{background:#e8f0fe;color:#1a56db}
+.bubble{min-width:0;padding:10px 14px;border-radius:14px;font-size:13.5px;line-height:1.65;word-break:break-word;overflow-wrap:anywhere;position:relative}
+.bubble.ai{background:var(--bubble-ai);border:1px solid var(--border);border-radius:3px 14px 14px 14px;color:var(--text);flex:1}
+.bubble.user{background:var(--bubble-user);color:#fff;border-radius:14px 3px 14px 14px;max-width:75%}
+.bubble pre{background:#f1f3f8;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-family:monospace;font-size:12px;white-space:pre-wrap;margin-top:6px;color:#2d3748}
+.bubble ul{padding-left:16px;margin-top:4px}
+.bubble li{margin-bottom:3px}
+.bubble-actions{display:flex;gap:4px;margin-top:6px;flex-wrap:wrap}
+.bact{background:none;border:1px solid var(--border);border-radius:6px;padding:2px 8px;font-size:11px;cursor:pointer;color:var(--sub);transition:all 0.15s}
+.bact:hover{background:var(--header);color:#fff;border-color:var(--header)}
+.pinned{border-left:3px solid #f59e0b!important}
+.page-ref{display:inline-block;background:#fef3c7;color:#92400e;border-radius:4px;padding:1px 5px;font-size:11px;font-weight:600;margin:0 2px}
+.follow-ups{margin-top:8px;display:flex;flex-wrap:wrap;gap:5px}
+.fq-btn{background:#eef3fb;border:1px solid #c7d7f0;border-radius:12px;padding:3px 10px;font-size:11px;color:#0f2d52;cursor:pointer;transition:all 0.15s}
+.fq-btn:hover{background:#0f2d52;color:#fff}
+.file-ref{display:inline-flex;align-items:center;gap:4px;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.25);border-radius:6px;padding:2px 7px;font-size:11px;margin-bottom:5px;margin-right:3px}
+.dots span{display:inline-block;width:6px;height:6px;background:#94a3b8;border-radius:50%;animation:bounce 1.3s infinite ease-in-out;margin:0 2px}
+.dots span:nth-child(2){animation-delay:0.2s}
+.dots span:nth-child(3){animation-delay:0.4s}
+@keyframes bounce{0%,80%,100%{transform:scale(0.6);opacity:0.4}40%{transform:scale(1);opacity:1}}
+.divider{height:1px;background:var(--border);flex-shrink:0}
+.dropzone-wrap{padding:8px 16px 4px;flex-shrink:0}
+.dropzone{border:2px dashed var(--border);border-radius:10px;padding:10px;text-align:center;cursor:pointer;transition:all 0.2s;background:var(--input)}
+.dropzone:hover,.dropzone.drag{border-color:var(--header);background:#eef3fb}
+.dropzone-icon{font-size:18px;margin-bottom:2px}
+.dropzone strong{font-size:12px;color:var(--text);font-weight:600}
+.dropzone span{font-size:10px;color:var(--sub)}
+.chips-wrap{display:flex;flex-wrap:wrap;gap:5px;padding:4px 16px;flex-shrink:0;min-height:0}
+.chip{display:flex;align-items:center;gap:5px;background:var(--app);border:1px solid var(--border);border-radius:16px;padding:3px 8px;font-size:11px;color:var(--text)}
+.ext{font-size:9px;font-weight:700;padding:1px 4px;border-radius:3px;text-transform:uppercase}
+.ext-pdf{background:#fde8e8;color:#9b1c1c}.ext-xlsx,.ext-xls,.ext-csv{background:#def7ec;color:#03543f}
+.ext-docx,.ext-doc{background:#e1effe;color:#1e429f}.ext-js,.ext-ts,.ext-jsx,.ext-tsx{background:#fef3c7;color:#92400e}
+.ext-py{background:#e0f2fe;color:#075985}.ext-json,.ext-xml,.ext-yaml,.ext-yml{background:#f3f4f6;color:#374151}
+.ext-jpg,.ext-jpeg,.ext-png,.ext-gif,.ext-webp{background:#fce7f3;color:#9d174d}.ext-default{background:#f3f4f6;color:#374151}
+.chip-remove{background:none;border:none;cursor:pointer;color:#94a3b8;font-size:14px;line-height:1;padding:0;margin-left:1px}
+.chip-remove:hover{color:#ef4444}
+.memory-bar{display:flex;flex-wrap:wrap;gap:5px;padding:4px 16px;background:#f0f7ff;border-top:1px solid var(--border);flex-shrink:0;min-height:0;align-items:center}
+[data-theme="dark"] .memory-bar{background:#0a1929}
+.mem-label{font-size:11px;color:var(--sub);margin-right:4px}
+.mem-count{font-size:10px;color:#0f2d52;background:#dbeafe;border-radius:8px;padding:1px 6px;font-weight:600}
+.quick-prompts{display:flex;flex-wrap:wrap;gap:5px;padding:4px 16px 2px;flex-shrink:0}
+.qp-btn{background:var(--app);border:1px solid var(--border);border-radius:14px;padding:3px 10px;font-size:11px;color:var(--text);cursor:pointer;transition:all 0.15s;white-space:nowrap}
+.qp-btn:hover{background:var(--header);color:#fff;border-color:var(--header)}
+.input-row{display:flex;align-items:flex-end;gap:6px;padding:8px 12px 12px;background:var(--app);flex-shrink:0}
+.attach-btn,.mic-btn{width:38px;height:38px;border:1px solid var(--border);border-radius:9px;background:var(--input);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.15s;flex-shrink:0}
+.attach-btn:hover,.mic-btn:hover{background:#e8eef7;border-color:var(--header)}
+.mic-btn.recording{background:#fee2e2;border-color:#ef4444;animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.6}}
+.attach-btn svg,.mic-btn svg{width:16px;height:16px;fill:none;stroke:#64748b;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.input-box{flex:1;border:1px solid var(--border);border-radius:10px;padding:9px 12px;font-size:13.5px;font-family:inherit;color:var(--text);background:var(--input);resize:none;min-height:40px;max-height:100px;outline:none;line-height:1.5;transition:border-color 0.2s}
+.input-box:focus{border-color:var(--header);background:var(--app)}
+.input-box::placeholder{color:#94a3b8}
+.send-btn{width:40px;height:40px;background:var(--header);border:none;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:opacity 0.15s;flex-shrink:0}
+.send-btn:hover{opacity:0.85}
+.send-btn:disabled{opacity:0.4;cursor:not-allowed}
+.send-btn svg{width:16px;height:16px;fill:white}
+.search-bar{display:none;padding:6px 16px;background:var(--app);border-bottom:1px solid var(--border);flex-shrink:0}
+.search-bar input{width:100%;border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:12px;outline:none;background:var(--input);color:var(--text)}
+.search-highlight{background:#fef08a;border-radius:2px}
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:999;align-items:center;justify-content:center}
+.modal{background:var(--app);border-radius:14px;padding:22px;width:90%;max-width:540px;box-shadow:0 20px 60px rgba(0,0,0,0.3);color:var(--text);max-height:90vh;overflow-y:auto}
+.modal h2{font-size:15px;font-weight:600;color:var(--header);margin-bottom:6px}
+.modal p{font-size:12px;color:var(--sub);margin-bottom:10px}
+.modal textarea{width:100%;height:150px;border:1px solid var(--border);border-radius:8px;padding:9px;font-size:13px;font-family:inherit;resize:vertical;outline:none;background:var(--input);color:var(--text)}
+.modal-btns{display:flex;gap:8px;margin-top:10px;justify-content:flex-end;flex-wrap:wrap}
+.mbtn{padding:7px 14px;border-radius:7px;font-size:12px;cursor:pointer;border:1px solid var(--border);background:var(--input);color:var(--text)}
+.mbtn.primary{background:var(--header);color:#fff;border-color:var(--header)}
+.mbtn.danger{background:#fef2f2;color:#dc2626;border-color:#fca5a5}
+.mbtn.success{background:#f0fdf4;color:#16a34a;border-color:#86efac}
+.history-list{max-height:280px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;margin-bottom:10px}
+.hist-item{padding:8px 10px;border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:12px;color:var(--text);background:var(--input);transition:background 0.15s;display:flex;justify-content:space-between;align-items:flex-start}
+.hist-item:hover{background:#eef3fb}
+.hist-item .hist-date{font-size:10px;color:var(--sub);margin-top:2px}
+.hist-del{background:none;border:none;cursor:pointer;color:#94a3b8;font-size:13px;padding:0;flex-shrink:0}
+.hist-del:hover{color:#ef4444}
+.api-key-row{display:flex;gap:6px;align-items:center;margin-bottom:6px}
+.api-key-row input{flex:1;border:1px solid var(--border);border-radius:7px;padding:6px 9px;font-size:12px;font-family:monospace;outline:none;background:var(--input);color:var(--text)}
+.api-key-row .mbtn{padding:5px 10px;font-size:11px}
+.key-status{font-size:10px;padding:2px 6px;border-radius:8px;font-weight:600}
+.key-ok{background:#dcfce7;color:#16a34a}
+.key-active{background:#dbeafe;color:#1d4ed8}
+.key-err{background:#fee2e2;color:#dc2626}
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+.compare-grid select{border:1px solid var(--border);border-radius:7px;padding:6px 8px;font-size:12px;background:var(--input);color:var(--text);outline:none}
+.tracker-list{max-height:200px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;margin-bottom:8px}
+.tracker-item{display:flex;align-items:center;gap:6px;padding:5px 8px;border:1px solid var(--border);border-radius:7px;font-size:12px;background:var(--input)}
+.status-badge{font-size:10px;font-weight:700;padding:1px 6px;border-radius:8px;text-transform:uppercase}
+.status-pending{background:#fef3c7;color:#92400e}
+.status-approved{background:#dcfce7;color:#16a34a}
+.status-rejected{background:#fee2e2;color:#dc2626}
+@media(max-width:600px){.bubble{max-width:90%}.hbtn{font-size:10px;padding:2px 7px}.compare-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="header">
+    <div class="logo"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div>
+    <div class="header-text"><h1>DGM File Assistant</h1><p id="apiStatusText">Agent — Your Personal AI</p></div>
+    <div class="hbtns">
+      <button class="hbtn" id="langToggle" onclick="toggleLang()">🌐 EN</button>
+      <button class="hbtn" onclick="openRules()">⚙️ Rules</button>
+      <button class="hbtn" onclick="openHistory()">📋 History</button>
+      <button class="hbtn" onclick="openMeetingTemplate()">📝 Meeting</button>
+      <button class="hbtn" onclick="openApiKeys()">🔑 API Keys</button>
+      <button class="hbtn" onclick="openCompare()">⚖️ Compare</button>
+      <button class="hbtn" onclick="openTracker()">📊 Tracker</button>
+      <button class="hbtn" onclick="toggleSearch()">🔍 Search</button>
+      <button class="hbtn" onclick="toggleDark()" id="darkBtn">🌙 Dark</button>
+      <button class="hbtn" onclick="printChat()">🖨️ Print</button>
+    </div>
+  </div>
+
+  <!-- SEARCH BAR -->
+  <div class="search-bar" id="searchBar">
+    <input type="text" id="searchInput" placeholder="Search in chat..." oninput="searchChat(this.value)" onkeydown="if(event.key==='Escape')toggleSearch()">
+  </div>
+
+  <!-- RULES MODAL -->
+  <div class="modal-bg" id="rulesModal">
+    <div class="modal">
+      <h2>⚙️ AI Rules & Instructions</h2>
+      <p>These rules will be followed in every conversation.</p>
+      <textarea id="rulesInput" placeholder="Example:&#10;- Always be brief&#10;- Focus on action items&#10;- Highlight numbers"></textarea>
+      <div class="modal-btns">
+        <button class="mbtn" onclick="closeModal('rulesModal')">Cancel</button>
+        <button class="mbtn danger" onclick="document.getElementById('rulesInput').value=''">Clear</button>
+        <button class="mbtn primary" onclick="saveRules()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- HISTORY MODAL -->
+  <div class="modal-bg" id="historyModal">
+    <div class="modal">
+      <h2>📋 Chat History</h2>
+      <p>Saved conversations — click to restore.</p>
+      <div class="history-list" id="historyList"></div>
+      <div class="modal-btns">
+        <button class="mbtn danger" onclick="clearHistory()">Clear All</button>
+        <button class="mbtn primary" onclick="saveCurrentChat()">💾 Save Current</button>
+        <button class="mbtn" onclick="closeModal('historyModal')">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MEETING TEMPLATE MODAL -->
+  <div class="modal-bg" id="meetingModal">
+    <div class="modal">
+      <h2>📝 Meeting Notes Template</h2>
+      <p>Send this to Agent to get structured meeting notes.</p>
+      <textarea id="meetingInput" style="height:180px">Meeting: [Title]
+Date: [Date]
+Attendees: [Names]
+Agenda: [Topics]
+
+Please extract:
+1. Key decisions made
+2. Action items with owners
+3. Next meeting date
+4. Summary in 5 bullet points</textarea>
+      <div class="modal-btns">
+        <button class="mbtn" onclick="closeModal('meetingModal')">Cancel</button>
+        <button class="mbtn primary" onclick="useMeetingTemplate()">Send to Agent</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- API KEYS MODAL -->
+  <div class="modal-bg" id="apiModal">
+    <div class="modal">
+      <h2>🔑 API Keys Manager</h2>
+      <p>Add multiple Groq API keys. If one fails/expires, next one auto-activates.</p>
+      <div id="apiKeysList"></div>
+      <div style="display:flex;gap:6px;margin-bottom:10px">
+        <input type="text" id="newApiKey" placeholder="Enter Groq API key (gsk_...)" style="flex:1;border:1px solid var(--border);border-radius:7px;padding:6px 9px;font-size:12px;font-family:monospace;outline:none;background:var(--input);color:var(--text)">
+        <button class="mbtn primary" onclick="addApiKey()">Add</button>
+      </div>
+      <p style="font-size:10px;color:var(--sub)">Get free keys at console.groq.com — add 2-3 keys for uninterrupted service.</p>
+      <div class="modal-btns">
+        <button class="mbtn" onclick="closeModal('apiModal')">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- COMPARE MODAL -->
+  <div class="modal-bg" id="compareModal">
+    <div class="modal">
+      <h2>⚖️ Compare Documents</h2>
+      <p>Select two stored documents to compare differences.</p>
+      <div class="compare-grid">
+        <select id="compareFile1"><option value="">-- Select File 1 --</option></select>
+        <select id="compareFile2"><option value="">-- Select File 2 --</option></select>
+      </div>
+      <div class="modal-btns">
+        <button class="mbtn" onclick="closeModal('compareModal')">Cancel</button>
+        <button class="mbtn primary" onclick="runCompare()">⚖️ Compare Now</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TRACKER MODAL -->
+  <div class="modal-bg" id="trackerModal">
+    <div class="modal">
+      <h2>📊 Approval Status Tracker</h2>
+      <p>Track pending/approved items from your documents.</p>
+      <div class="tracker-list" id="trackerList"></div>
+      <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">
+        <input type="text" id="trackerItem" placeholder="Item description..." style="flex:1;border:1px solid var(--border);border-radius:7px;padding:6px 9px;font-size:12px;outline:none;background:var(--input);color:var(--text);min-width:120px">
+        <select id="trackerStatus" style="border:1px solid var(--border);border-radius:7px;padding:6px 8px;font-size:12px;background:var(--input);color:var(--text);outline:none">
+          <option value="pending">Pending</option>
+          <option value="approved">Approved</option>
+          <option value="rejected">Rejected</option>
+        </select>
+        <button class="mbtn primary" onclick="addTrackerItem()">Add</button>
+      </div>
+      <div class="modal-btns">
+        <button class="mbtn success" onclick="extractTrackerFromDocs()">🤖 Auto-Extract from Docs</button>
+        <button class="mbtn danger" onclick="clearTracker()">Clear All</button>
+        <button class="mbtn" onclick="closeModal('trackerModal')">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CHAT AREA -->
+  <div class="chat-area" id="chat">
+    <div class="msg">
+      <div class="avatar ai">AI</div>
+      <div class="bubble ai">
+        <strong>Hello! I'm your Agent.</strong><br><br>
+        Upload any file and ask me anything — I'll <strong>remember your files</strong> even after days!<br>
+        <ul style="margin-top:6px">
+          <li>📄 PDF documents &amp; reports</li>
+          <li>📊 Excel, CSV spreadsheets</li>
+          <li>📝 Word documents</li>
+          <li>🖼️ Images (JPG, PNG)</li>
+          <li>💻 Code files, JSON, XML</li>
+        </ul>
+        <br>🎤 Use mic button to speak your question!<br>
+        📂 Files stored permanently — ask questions anytime!
+      </div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="dropzone-wrap">
+    <div class="dropzone" id="dropzone" onclick="document.getElementById('fileInput').click()" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="handleDrop(event)">
+      <div class="dropzone-icon">📂</div>
+      <strong>Drop files here or click to upload</strong>
+      <span>PDF · Excel · Word · CSV · Images · Code · JSON · Folder</span>
+    </div>
+  </div>
+  <input type="file" id="fileInput" multiple accept="*/*" style="display:none" onchange="handleFileSelect(event)">
+  <input type="file" id="folderInput" multiple webkitdirectory style="display:none" onchange="handleFileSelect(event)">
+
+  <div class="chips-wrap" id="chipsWrap"></div>
+  <div class="memory-bar" id="memoryWrap"></div>
+  <div class="quick-prompts" id="quickPrompts" style="display:none"></div>
+
+  <div class="input-row">
+    <button class="attach-btn" onclick="document.getElementById('fileInput').click()" title="Attach file">
+      <svg viewBox="0 0 24 24"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
+    </button>
+    <button class="mic-btn" id="micBtn" onclick="toggleMic()" title="Voice input">
+      <svg viewBox="0 0 24 24"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"/></svg>
+    </button>
+    <textarea class="input-box" id="userInput" placeholder="Ask anything... (Enter to send, Shift+Enter for new line)" rows="1"
+      onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
+    <button class="send-btn" id="sendBtn" onclick="sendMessage()" title="Send">
+      <svg viewBox="0 0 24 24"><path d="M22 2L11 13M22 2L15 22l-4-9-9-4 20-7z"/></svg>
+    </button>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════
+const uploadedFiles = [];
+let isLoading = false;
+let conversationHistory = [];
+let customRules = localStorage.getItem('dgm_rules') || '';
+let replyLang = localStorage.getItem('dgm_lang') || 'english';
+let isDark = localStorage.getItem('dgm_dark') === 'true';
+let isRecording = false;
+let recognition = null;
+let isSpeaking = false;
+let currentApiKeyIndex = 0;
+let trackerItems = [];
+
+// ── API KEYS (multiple for auto-fallback) ──
+const DEFAULT_KEYS = [
+  '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',
+  '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',
+  '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'
+];
+let apiKeys = [];
+try { apiKeys = JSON.parse(localStorage.getItem('dgm_api_keys') || '[]'); } catch(e){}
+if (!apiKeys.length) { apiKeys = [...DEFAULT_KEYS]; saveApiKeys(); }
+
+try { trackerItems = JSON.parse(localStorage.getItem('dgm_tracker') || '[]'); } catch(e){}
+
+// ── IndexedDB for persistent file memory ──
+let db = null;
+const DB_NAME = 'DGMFileAssistant';
+const DB_VERSION = 1;
+const STORE = 'fileMemory';
+
+function initDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = e => {
+      const d = e.target.result;
+      if (!d.objectStoreNames.contains(STORE)) d.createObjectStore(STORE, {keyPath:'name'});
+    };
+    req.onsuccess = e => { db = e.target.result; resolve(); };
+    req.onerror = () => reject();
+  });
+}
+
+async function dbSaveFile(name, content) {
+  if (!db) return;
+  return new Promise(resolve => {
+    const tx = db.transaction(STORE, 'readwrite');
+    tx.objectStore(STORE).put({name, content, savedAt: Date.now()});
+    tx.oncomplete = resolve;
+  });
+}
+
+async function dbGetAllFiles() {
+  if (!db) return {};
+  return new Promise(resolve => {
+    const tx = db.transaction(STORE, 'readonly');
+    const req = tx.objectStore(STORE).getAll();
+    req.onsuccess = () => {
+      const map = {};
+      (req.result || []).forEach(r => { map[r.name] = r.content; });
+      resolve(map);
+    };
+    req.onerror = () => resolve({});
+  });
+}
+
+async function dbDeleteFile(name) {
+  if (!db) return;
+  return new Promise(resolve => {
+    const tx = db.transaction(STORE, 'readwrite');
+    tx.objectStore(STORE).delete(name);
+    tx.oncomplete = resolve;
+  });
+}
+
+async function dbClearAll() {
+  if (!db) return;
+  return new Promise(resolve => {
+    const tx = db.transaction(STORE, 'readwrite');
+    tx.objectStore(STORE).clear();
+    tx.oncomplete = resolve;
+  });
+}
+
+// ── INIT ──
+(async () => {
+  await initDB();
+  if (isDark) { document.documentElement.setAttribute('data-theme','dark'); document.getElementById('darkBtn').textContent = '☀️ Light'; }
+  document.getElementById('langToggle').textContent = replyLang === 'english' ? '🌐 EN' : '🌐 தமிழ்';
+  await renderMemoryChips();
+  updateApiStatus();
+})();
+
+// ── HELPERS ──
+function getExt(name) { return (name.split('.').pop() || 'file').toLowerCase(); }
+function getExtClass(ext) {
+  const m = {pdf:'ext-pdf',xlsx:'ext-xlsx',xls:'ext-xls',csv:'ext-csv',docx:'ext-docx',doc:'ext-doc',
+    js:'ext-js',ts:'ext-ts',jsx:'ext-jsx',tsx:'ext-tsx',py:'ext-py',json:'ext-json',xml:'ext-json',
+    yaml:'ext-yaml',yml:'ext-yml',jpg:'ext-jpg',jpeg:'ext-jpeg',png:'ext-png',gif:'ext-gif',webp:'ext-webp'};
+  return m[ext] || 'ext-default';
+}
+
+// ── API KEY MANAGEMENT ──
+function saveApiKeys() { localStorage.setItem('dgm_api_keys', JSON.stringify(apiKeys)); }
+
+function getCurrentKey() { return apiKeys[currentApiKeyIndex] || apiKeys[0]; }
+
+function rotateToNextKey() {
+  if (apiKeys.length <= 1) return false;
+  currentApiKeyIndex = (currentApiKeyIndex + 1) % apiKeys.length;
+  updateApiStatus();
+  return true;
+}
+
+function updateApiStatus() {
+  const el = document.getElementById('apiStatusText');
+  if (!el) return;
+  const total = apiKeys.length;
+  const idx = currentApiKeyIndex + 1;
+  el.textContent = `Agent — Key ${idx}/${total} Active`;
+}
+
+function openApiKeys() {
+  renderApiKeysList();
+  openModal('apiModal');
+}
+
+function renderApiKeysList() {
+  const container = document.getElementById('apiKeysList');
+  container.innerHTML = '';
+  apiKeys.forEach((key, i) => {
+    const row = document.createElement('div');
+    row.className = 'api-key-row';
+    const masked = key.substring(0,8) + '••••••••••••' + key.slice(-4);
+    const isActive = i === currentApiKeyIndex;
+    row.innerHTML = `
+      <input type="text" value="${key}" onchange="apiKeys[${i}]=this.value;saveApiKeys()" style="flex:1;border:1px solid var(--border);border-radius:7px;padding:6px 9px;font-size:11px;font-family:monospace;outline:none;background:var(--input);color:var(--text)">
+      <span class="key-status ${isActive?'key-active':'key-ok'}">${isActive?'ACTIVE':'READY'}</span>
+      <button class="mbtn" onclick="setActiveKey(${i})" style="padding:4px 8px;font-size:10px">Use</button>
+      <button class="mbtn danger" onclick="removeApiKey(${i})" style="padding:4px 8px;font-size:10px">✕</button>`;
+    container.appendChild(row);
+  });
+}
+
+function addApiKey() {
+  const val = document.getElementById('newApiKey').value.trim();
+  if (!val || !val.startsWith('gsk_')) { alert('Enter a valid Groq key (starts with gsk_)'); return; }
+  apiKeys.push(val);
+  saveApiKeys();
+  document.getElementById('newApiKey').value = '';
+  renderApiKeysList();
+  updateApiStatus();
+}
+
+function removeApiKey(i) {
+  if (apiKeys.length <= 1) { alert('Keep at least one API key.'); return; }
+  apiKeys.splice(i, 1);
+  if (currentApiKeyIndex >= apiKeys.length) currentApiKeyIndex = 0;
+  saveApiKeys();
+  renderApiKeysList();
+  updateApiStatus();
+}
+
+function setActiveKey(i) {
+  currentApiKeyIndex = i;
+  saveApiKeys();
+  renderApiKeysList();
+  updateApiStatus();
+}
+
+// ── FILE CHIPS ──
+function renderChips() {
+  const w = document.getElementById('chipsWrap'); w.innerHTML = '';
+  uploadedFiles.forEach((f,i) => {
+    const ext = getExt(f.name);
+    const c = document.createElement('div'); c.className = 'chip';
+    const n = f.name.length > 22 ? f.name.substring(0,20)+'…' : f.name;
+    c.innerHTML = `<span class="ext ${getExtClass(ext)}">${ext.toUpperCase()}</span><span>${n}</span><button class="chip-remove" onclick="removeFile(${i})">✕</button>`;
+    w.appendChild(c);
+  });
+  if (uploadedFiles.length > 0) showQuickPrompts();
+  else hideQuickPrompts();
+}
+
+function removeFile(i) { uploadedFiles.splice(i,1); renderChips(); }
+
+async function renderMemoryChips() {
+  const w = document.getElementById('memoryWrap'); w.innerHTML = '';
+  const fileMemory = await dbGetAllFiles();
+  const files = Object.keys(fileMemory);
+  if (!files.length) return;
+  const lbl = document.createElement('span');
+  lbl.className = 'mem-label';
+  lbl.textContent = '📂 Memory:';
+  w.appendChild(lbl);
+  const cnt = document.createElement('span');
+  cnt.className = 'mem-count';
+  cnt.textContent = `${files.length} file${files.length>1?'s':''}`;
+  w.appendChild(cnt);
+  files.forEach(name => {
+    const ext = getExt(name);
+    const c = document.createElement('div'); c.className = 'chip';
+    const n = name.length > 22 ? name.substring(0,20)+'…' : name;
+    c.innerHTML = `<span class="ext ${getExtClass(ext)}">${ext.toUpperCase()}</span><span title="${name}">${n}</span><button class="chip-remove" onclick="removeMemoryFile('${name.replace(/'/g,"\\'")}')">✕</button>`;
+    w.appendChild(c);
+  });
+}
+
+async function removeMemoryFile(n) {
+  await dbDeleteFile(n);
+  await renderMemoryChips();
+}
+
+// ── QUICK PROMPTS ──
+function showQuickPrompts() {
+  const qp = document.getElementById('quickPrompts');
+  qp.style.display = 'flex';
+  qp.innerHTML = '';
+  const prompts = [
+    {label:'📋 Summarize', text:'Please summarize this document with key points.'},
+    {label:'✅ Action Items', text:'Extract all action items and to-do tasks from this document.'},
+    {label:'🔑 Key Points', text:'List the most important key points from this document.'},
+    {label:'📊 Data Analysis', text:'Analyze the data and highlight important numbers and trends.'},
+    {label:'📝 Draft Reply', text:'Draft a professional reply letter based on this document.'},
+    {label:'📋 MOM', text:'Generate structured Minutes of Meeting from this document.'},
+    {label:'⚠️ Pending Items', text:'List all pending, approval-required, or action-needed items.'},
+  ];
+  prompts.forEach(p => {
+    const btn = document.createElement('button');
+    btn.className = 'qp-btn';
+    btn.textContent = p.label;
+    btn.onclick = () => { document.getElementById('userInput').value = p.text; autoResize(document.getElementById('userInput')); sendMessage(); };
+    qp.appendChild(btn);
+  });
+}
+
+function hideQuickPrompts() {
+  const qp = document.getElementById('quickPrompts');
+  qp.style.display = 'none';
+  qp.innerHTML = '';
+}
+
+// ── FILE READING ──
+async function readFileContent(file) {
+  const ext = getExt(file.name);
+  const textTypes = ['txt','md','js','ts','jsx','tsx','py','java','c','cpp','cs','go','rb','php','html','css','json','xml','yaml','yml','sql','sh','bat','csv','log','ini','env','toml','r','kt','swift','rs','dart'];
+  if (textTypes.includes(ext)) {
+    return new Promise((res,rej) => {
+      const r = new FileReader();
+      r.onload = e => res(`[File: ${file.name}]\n\n${e.target.result.substring(0,18000)}`);
+      r.onerror = () => rej('Read error');
+      r.readAsText(file);
+    });
+  }
+  if (ext === 'pdf') {
+    return new Promise(res => {
+      const r = new FileReader();
+      r.onload = async e => {
+        try {
+          const lib = window['pdfjs-dist/build/pdf'];
+          lib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+          const pdf = await lib.getDocument({data: new Uint8Array(e.target.result)}).promise;
+          let txt = '';
+          const pages = Math.min(pdf.numPages, 50);
+          for (let i = 1; i <= pages; i++) {
+            const pg = await pdf.getPage(i);
+            const ct = await pg.getTextContent();
+            txt += `\n[Page ${i}]\n` + ct.items.map(x=>x.str).join(' ') + '\n';
+          }
+          res(`[PDF: ${file.name} | Pages: ${pdf.numPages}]\n\n${txt.substring(0,20000)}`);
+        } catch(e) { res(`[PDF: ${file.name} | Size: ${(file.size/1024).toFixed(1)}KB]`); }
+      };
+      r.readAsArrayBuffer(file);
+    });
+  }
+  if (['xlsx','xls'].includes(ext)) {
+    return new Promise(res => {
+      const r = new FileReader();
+      r.onload = e => {
+        try {
+          const wb = XLSX.read(new Uint8Array(e.target.result),{type:'array'});
+          let out = `[Excel: ${file.name} | Sheets: ${wb.SheetNames.join(', ')}]\n\n`;
+          wb.SheetNames.slice(0,5).forEach(sh => { out += `--- ${sh} ---\n${XLSX.utils.sheet_to_csv(wb.Sheets[sh]).substring(0,8000)}\n\n`; });
+          res(out);
+        } catch(e) { res(`[Excel: ${file.name}]`); }
+      };
+      r.readAsArrayBuffer(file);
+    });
+  }
+  if (['doc','docx'].includes(ext)) {
+    return new Promise(res => {
+      const r = new FileReader();
+      r.onload = async e => {
+        try { const result = await mammoth.extractRawText({arrayBuffer: e.target.result}); res(`[Word: ${file.name}]\n\n${result.value.substring(0,16000)}`); }
+        catch(e) { res(`[Word: ${file.name}]`); }
+      };
+      r.readAsArrayBuffer(file);
+    });
+  }
+  return `[File: ${file.name} | ${ext.toUpperCase()} | ${(file.size/1024).toFixed(1)}KB]`;
+}
+
+async function readImageAsBase64(file) {
+  return new Promise(res => { const r = new FileReader(); r.onload = e => res(e.target.result); r.readAsDataURL(file); });
+}
+
+// ── FILE INPUT HANDLERS ──
+function handleFileSelect(event) {
+  const files = Array.from(event.target.files);
+  files.forEach(f => { if (!uploadedFiles.find(x=>x.name===f.name)) uploadedFiles.push(f); });
+  renderChips();
+  event.target.value = '';
+}
+
+function handleDrop(event) {
+  event.preventDefault();
+  document.getElementById('dropzone').classList.remove('drag');
+  const files = Array.from(event.dataTransfer.files);
+  files.forEach(f => { if (!uploadedFiles.find(x=>x.name===f.name)) uploadedFiles.push(f); });
+  renderChips();
+}
+</script>
+
+<script>
+// ══════════════════════════════════════════
+// ADD MESSAGE & CHAT UI
+// ══════════════════════════════════════════
+function addMsg(role, html, fileNames, rawText) {
+  const chat = document.getElementById('chat');
+  const wrap = document.createElement('div'); wrap.className = `msg ${role}`;
+  const av = document.createElement('div'); av.className = `avatar ${role}`; av.textContent = role==='ai'?'AI':'You';
+  const bubble = document.createElement('div'); bubble.className = `bubble ${role}`;
+  let content = '';
+  if (fileNames && fileNames.length) { fileNames.forEach(fn => { content += `<div class="file-ref">📄 ${fn}</div>`; }); content += '<br>'; }
+  content += (html||'')
+    .replace(/```([\s\S]*?)```/g,'<pre>$1</pre>')
+    .replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')
+    .replace(/\[Page (\d+)\]/g,'<span class="page-ref">📄 Page $1</span>')
+    .replace(/Page (\d+)/g,'<span class="page-ref">📄 Page $1</span>')
+    .replace(/\n/g,'<br>');
+  bubble.innerHTML = content;
+  if (role === 'ai') {
+    const plain = rawText || html || '';
+    const acts = document.createElement('div'); acts.className = 'bubble-actions';
+    acts.innerHTML = `
+      <button class="bact" onclick="copyText(this,'${encodeURIComponent(plain)}')">📋 Copy</button>
+      <button class="bact" onclick="speakText('${encodeURIComponent(plain)}')">🔊 Read</button>
+      <button class="bact" onclick="pinMsg(this)">📌 Pin</button>
+      <button class="bact" onclick="exportMsg('${encodeURIComponent(plain)}')">📤 Export</button>`;
+    bubble.appendChild(acts);
+  }
+  wrap.appendChild(av); wrap.appendChild(bubble);
+  chat.appendChild(wrap);
+  setTimeout(() => { chat.scrollTop = chat.scrollHeight; }, 50);
+  return bubble;
+}
+
+function addFollowUps(questions) {
+  if (!questions || !questions.length) return;
+  const chat = document.getElementById('chat');
+  const wrap = document.createElement('div');
+  wrap.className = 'msg';
+  wrap.innerHTML = `<div class="avatar ai" style="opacity:0"></div><div style="flex:1"><div style="font-size:11px;color:var(--sub);margin-bottom:4px">💡 Related questions:</div><div class="follow-ups">${questions.map(q=>`<button class="fq-btn" onclick="askFollowUp('${encodeURIComponent(q)}')">${q}</button>`).join('')}</div></div>`;
+  chat.appendChild(wrap);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+function askFollowUp(encoded) {
+  const q = decodeURIComponent(encoded);
+  document.getElementById('userInput').value = q;
+  sendMessage();
+}
+
+function copyText(btn, encoded) {
+  navigator.clipboard.writeText(decodeURIComponent(encoded)).then(() => { btn.textContent = '✅ Copied'; setTimeout(()=>btn.textContent='📋 Copy',2000); });
+}
+
+function pinMsg(btn) {
+  const bubble = btn.closest('.bubble');
+  bubble.classList.toggle('pinned');
+  btn.textContent = bubble.classList.contains('pinned') ? '📌 Pinned' : '📌 Pin';
+}
+
+function exportMsg(encoded) {
+  const text = decodeURIComponent(encoded);
+  const blob = new Blob([text], {type:'text/plain'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = `Agent_Reply_${new Date().toISOString().slice(0,10)}.txt`; a.click();
+}
+
+function showLoading() {
+  const chat = document.getElementById('chat');
+  const w = document.createElement('div'); w.className='msg'; w.id='loadingMsg';
+  w.innerHTML=`<div class="avatar ai">AI</div><div class="bubble ai dots"><span></span><span></span><span></span></div>`;
+  chat.appendChild(w); chat.scrollTop = chat.scrollHeight;
+}
+function hideLoading() { const el=document.getElementById('loadingMsg'); if(el) el.remove(); }
+
+// ── CHAT SEARCH ──
+function toggleSearch() {
+  const bar = document.getElementById('searchBar');
+  const visible = bar.style.display === 'block';
+  bar.style.display = visible ? 'none' : 'block';
+  if (!visible) { document.getElementById('searchInput').focus(); searchChat(''); }
+  else { searchChat(''); }
+}
+
+function searchChat(query) {
+  const bubbles = document.querySelectorAll('.bubble');
+  bubbles.forEach(b => {
+    const text = b.innerText || '';
+    if (!query) { b.closest('.msg').style.display = ''; return; }
+    const match = text.toLowerCase().includes(query.toLowerCase());
+    b.closest('.msg').style.display = match ? '' : 'none';
+  });
+}
+
+// ══════════════════════════════════════════
+// SEND MESSAGE — with API fallback
+// ══════════════════════════════════════════
+async function callGroqAPI(systemPrompt, messages, isVision, imgContents, userMsg, retryCount = 0) {
+  const key = getCurrentKey();
+  let response;
+  if (isVision) {
+    response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${key}`},
+      body: JSON.stringify({model:'meta-llama/llama-4-scout-17b-16e-instruct', max_tokens:2000,
+        messages:[{role:'system',content:systemPrompt},...messages.slice(0,-1),{role:'user',content:imgContents}]})
+    });
+  } else {
+    response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${key}`},
+      body: JSON.stringify({model:'llama-3.3-70b-versatile', max_tokens:2000,
+        messages:[{role:'system',content:systemPrompt},...messages]})
+    });
+  }
+  const data = await response.json();
+  // If rate limit or auth error, try next key
+  if (data.error) {
+    const errType = data.error.type || '';
+    const errMsg = data.error.message || '';
+    if ((errType.includes('rate_limit') || errType.includes('auth') || errMsg.includes('expired') || response.status === 429 || response.status === 401) && retryCount < apiKeys.length - 1) {
+      rotateToNextKey();
+      addMsg('ai', `⚠️ Key ${retryCount+1} issue — switching to next key automatically...`);
+      return callGroqAPI(systemPrompt, messages, isVision, imgContents, userMsg, retryCount + 1);
+    }
+    throw new Error(data.error.message);
+  }
+  return data;
+}
+
+async function sendMessage() {
+  if (isLoading) return;
+  const input = document.getElementById('userInput');
+  const question = input.value.trim();
+  if (!question && uploadedFiles.length === 0) return;
+  const fileNames = uploadedFiles.map(f=>f.name);
+  addMsg('user', question || 'Please summarize the uploaded file(s).', fileNames);
+  input.value = ''; input.style.height = 'auto';
+  isLoading = true; document.getElementById('sendBtn').disabled = true; showLoading();
+  try {
+    let fileContext = '';
+    const imageExts = ['jpg','jpeg','png','gif','webp','bmp'];
+    const imageFiles = uploadedFiles.filter(f=>imageExts.includes(getExt(f.name)));
+
+    // Save new files to IndexedDB
+    for (const file of uploadedFiles) {
+      if (!imageExts.includes(getExt(file.name))) {
+        const content = await readFileContent(file);
+        await dbSaveFile(file.name, content);
+        fileContext += `\n\n=== NEW FILE: ${file.name} ===\n${content}`;
+      }
+    }
+
+    // Load all stored files from IndexedDB
+    const storedFiles = await dbGetAllFiles();
+    const storedContext = Object.entries(storedFiles)
+      .filter(([n]) => !uploadedFiles.find(f=>f.name===n))
+      .map(([n,c]) => `\n\n=== STORED FILE: ${n} ===\n${c}`)
+      .join('');
+    fileContext += storedContext;
+
+    await renderMemoryChips();
+
+    const systemPrompt = `You are "Agent" — a smart, professional personal assistant for a DGM (Deputy General Manager).
+
+TONE & RESPECT: Always speak respectfully. Never use "da","di","daa","bro","yaar". Use "sir" when appropriate.
+
+LANGUAGE: ALWAYS reply in ${replyLang === 'tamil' ? 'Tamil (தமிழ்)' : 'English'} only. Do not switch languages.
+
+BEHAVIOR:
+- Answer DIRECTLY and CONCISELY — no long explanations unless asked
+- If you are not sure, say "I'm not sure" — never guess or make up facts
+- For images: describe only what you clearly see
+- For files/data: highlight key numbers, trends, action items
+- For documents: extract decisions and summaries
+- Use bullet points for lists
+- NEVER correct user spelling or grammar — understand intent and answer
+- You have PERSISTENT FILE MEMORY — files are stored permanently, answer questions about any previously uploaded file
+- When answering from a document, mention the PAGE NUMBER if available (e.g., "As per Page 3...")
+- Your name is "Agent" — only say your name when asked directly
+- Keep answers short and to the point — max 5-6 lines unless user asks for detail
+- At the end of your answer, suggest 2-3 short follow-up questions the user might want to ask, formatted as: FOLLOWUPS: question1 | question2 | question3
+${customRules ? `\nCUSTOM RULES:\n${customRules}` : ''}
+${fileContext ? `\nFILE CONTEXT (use this to answer questions):${fileContext}` : ''}`;
+
+    const userMsg = question || 'Please summarize the uploaded file(s).';
+    conversationHistory.push({role:'user', content: userMsg});
+    const recentHistory = conversationHistory.slice(-20);
+
+    let imgContents = [];
+    if (imageFiles.length > 0) {
+      for (const f of imageFiles) { const b64 = await readImageAsBase64(f); imgContents.push({type:'image_url',image_url:{url:b64}}); }
+      imgContents.push({type:'text',text: userMsg});
+    }
+
+    const data = await callGroqAPI(systemPrompt, recentHistory, imageFiles.length > 0, imgContents, userMsg);
+    hideLoading();
+
+    if (data.choices && data.choices.length > 0) {
+      let answer = data.choices[0].message.content.trim();
+      conversationHistory.push({role:'assistant', content: answer});
+
+      // Extract follow-up questions
+      let followUps = [];
+      const fuMatch = answer.match(/FOLLOWUPS:\s*(.+)$/m);
+      if (fuMatch) {
+        followUps = fuMatch[1].split('|').map(s=>s.trim()).filter(Boolean).slice(0,3);
+        answer = answer.replace(/FOLLOWUPS:.*$/m, '').trim();
+      }
+
+      addMsg('ai', answer, null, answer);
+      if (followUps.length) addFollowUps(followUps);
+    } else {
+      addMsg('ai','⚠️ No response. Please try again.');
+    }
+  } catch(err) {
+    hideLoading();
+    addMsg('ai', `⚠️ Error: ${err.message || 'Connection error. Check internet.'}`);
+  }
+  uploadedFiles.length = 0; renderChips(); hideQuickPrompts();
+  isLoading = false; document.getElementById('sendBtn').disabled = false;
+  document.getElementById('userInput').focus();
+}
+
+function handleKey(e) { if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage();} }
+function autoResize(el) { el.style.height='auto'; el.style.height=Math.min(el.scrollHeight,100)+'px'; }
+</script>
+
+<script>
+// ══════════════════════════════════════════
+// VOICE INPUT / OUTPUT
+// ══════════════════════════════════════════
+function toggleMic() {
+  if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
+    alert('Voice input not supported. Use Chrome.'); return;
+  }
+  if (isRecording) { recognition.stop(); return; }
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  recognition = new SR();
+  recognition.lang = replyLang === 'tamil' ? 'ta-IN' : 'en-IN';
+  recognition.continuous = false; recognition.interimResults = false;
+  recognition.onstart = () => { isRecording=true; document.getElementById('micBtn').classList.add('recording'); };
+  recognition.onresult = e => {
+    const txt = e.results[0][0].transcript;
+    document.getElementById('userInput').value = txt;
+    autoResize(document.getElementById('userInput'));
+  };
+  recognition.onend = () => { isRecording=false; document.getElementById('micBtn').classList.remove('recording'); };
+  recognition.onerror = () => { isRecording=false; document.getElementById('micBtn').classList.remove('recording'); };
+  recognition.start();
+}
+
+function speakText(encoded) {
+  const text = decodeURIComponent(encoded);
+  if (isSpeaking) { window.speechSynthesis.cancel(); isSpeaking=false; return; }
+  const utt = new SpeechSynthesisUtterance(text);
+  utt.lang = replyLang === 'tamil' ? 'ta-IN' : 'en-IN';
+  utt.rate = 0.95; utt.pitch = 1;
+  utt.onend = () => { isSpeaking=false; };
+  isSpeaking = true;
+  window.speechSynthesis.speak(utt);
+}
+
+// ══════════════════════════════════════════
+// DARK MODE / LANGUAGE
+// ══════════════════════════════════════════
+function toggleDark() {
+  isDark = !isDark;
+  document.documentElement.setAttribute('data-theme', isDark?'dark':'light');
+  document.getElementById('darkBtn').textContent = isDark?'☀️ Light':'🌙 Dark';
+  localStorage.setItem('dgm_dark', isDark);
+}
+
+function toggleLang() {
+  replyLang = replyLang==='english'?'tamil':'english';
+  localStorage.setItem('dgm_lang', replyLang);
+  document.getElementById('langToggle').textContent = replyLang==='english'?'🌐 EN':'🌐 தமிழ்';
+  addMsg('ai', replyLang==='english'?'Switched to English.':'தமிழிலே பேசுகிறேன்.');
+}
+
+function printChat() { window.print(); }
+
+// ══════════════════════════════════════════
+// MODALS
+// ══════════════════════════════════════════
+function openModal(id) { document.getElementById(id).style.display='flex'; }
+function closeModal(id) { document.getElementById(id).style.display='none'; }
+document.querySelectorAll('.modal-bg').forEach(m => m.addEventListener('click', e => { if(e.target===m) m.style.display='none'; }));
+
+function openRules() { document.getElementById('rulesInput').value=customRules; openModal('rulesModal'); }
+function saveRules() {
+  customRules = document.getElementById('rulesInput').value.trim();
+  localStorage.setItem('dgm_rules', customRules); closeModal('rulesModal');
+  addMsg('ai', customRules?'✅ Rules saved!':'✅ Rules cleared.');
+}
+
+function openMeetingTemplate() { openModal('meetingModal'); }
+function useMeetingTemplate() {
+  const txt = document.getElementById('meetingInput').value.trim();
+  if (!txt) return;
+  document.getElementById('userInput').value = txt;
+  closeModal('meetingModal');
+  sendMessage();
+}
+
+// ══════════════════════════════════════════
+// CHAT HISTORY
+// ══════════════════════════════════════════
+function saveCurrentChat() {
+  if (!conversationHistory.length) { alert('No conversation to save.'); return; }
+  const histories = JSON.parse(localStorage.getItem('dgm_histories')||'[]');
+  const preview = conversationHistory.find(m=>m.role==='user')?.content?.substring(0,60)||'Chat';
+  histories.unshift({id:Date.now(), preview, date:new Date().toLocaleString(), messages:[...conversationHistory]});
+  if (histories.length > 30) histories.pop();
+  localStorage.setItem('dgm_histories', JSON.stringify(histories));
+  addMsg('ai','✅ Chat saved to history!');
+}
+
+function openHistory() {
+  const histories = JSON.parse(localStorage.getItem('dgm_histories')||'[]');
+  const list = document.getElementById('historyList'); list.innerHTML='';
+  if (!histories.length) {
+    list.innerHTML='<p style="color:var(--sub);font-size:12px;text-align:center;padding:10px">No saved chats yet.</p>';
+  } else {
+    histories.forEach((h,i) => {
+      const item = document.createElement('div'); item.className='hist-item';
+      item.innerHTML=`<div onclick="restoreChat(${i})" style="flex:1;cursor:pointer"><div>${h.preview}</div><div class="hist-date">${h.date} · ${h.messages.length} messages</div></div><button class="hist-del" onclick="deleteHistory(${i})">🗑️</button>`;
+      list.appendChild(item);
+    });
+  }
+  openModal('historyModal');
+}
+
+function restoreChat(i) {
+  const histories = JSON.parse(localStorage.getItem('dgm_histories')||'[]');
+  if (!histories[i]) return;
+  conversationHistory = [...histories[i].messages];
+  closeModal('historyModal');
+  const chat = document.getElementById('chat');
+  chat.innerHTML = '';
+  conversationHistory.forEach(m => addMsg(m.role==='user'?'user':'ai', m.content, null, m.content));
+  addMsg('ai','✅ Chat restored!');
+}
+
+function deleteHistory(i) {
+  const histories = JSON.parse(localStorage.getItem('dgm_histories')||'[]');
+  histories.splice(i,1);
+  localStorage.setItem('dgm_histories', JSON.stringify(histories));
+  openHistory();
+}
+
+function clearHistory() {
+  if (!confirm('Clear all saved chats?')) return;
+  localStorage.removeItem('dgm_histories');
+  closeModal('historyModal');
+  addMsg('ai','✅ History cleared.');
+}
+
+// ══════════════════════════════════════════
+// COMPARE DOCUMENTS
+// ══════════════════════════════════════════
+async function openCompare() {
+  const fileMemory = await dbGetAllFiles();
+  const files = Object.keys(fileMemory);
+  if (files.length < 2) { addMsg('ai','⚠️ Upload at least 2 documents to compare.'); return; }
+  const s1 = document.getElementById('compareFile1');
+  const s2 = document.getElementById('compareFile2');
+  s1.innerHTML = '<option value="">-- Select File 1 --</option>';
+  s2.innerHTML = '<option value="">-- Select File 2 --</option>';
+  files.forEach(f => {
+    s1.innerHTML += `<option value="${f}">${f}</option>`;
+    s2.innerHTML += `<option value="${f}">${f}</option>`;
+  });
+  openModal('compareModal');
+}
+
+async function runCompare() {
+  const f1 = document.getElementById('compareFile1').value;
+  const f2 = document.getElementById('compareFile2').value;
+  if (!f1 || !f2 || f1===f2) { alert('Select two different files.'); return; }
+  closeModal('compareModal');
+  const fileMemory = await dbGetAllFiles();
+  const q = `Compare these two documents and list:
+1. Key differences
+2. Common points
+3. Which one is more recent or updated (if determinable)
+
+FILE 1: ${f1}
+${fileMemory[f1]?.substring(0,6000)}
+
+FILE 2: ${f2}
+${fileMemory[f2]?.substring(0,6000)}`;
+  document.getElementById('userInput').value = q;
+  sendMessage();
+}
+
+// ══════════════════════════════════════════
+// APPROVAL TRACKER
+// ══════════════════════════════════════════
+function openTracker() {
+  renderTrackerList();
+  openModal('trackerModal');
+}
+
+function renderTrackerList() {
+  const list = document.getElementById('trackerList'); list.innerHTML='';
+  if (!trackerItems.length) {
+    list.innerHTML='<p style="color:var(--sub);font-size:12px;text-align:center;padding:8px">No items yet. Add manually or auto-extract from docs.</p>';
+    return;
+  }
+  trackerItems.forEach((item,i) => {
+    const el = document.createElement('div'); el.className='tracker-item';
+    el.innerHTML=`<span style="flex:1;font-size:12px">${item.text}</span>
+      <select class="status-badge status-${item.status}" onchange="updateTrackerStatus(${i},this.value)" style="border:none;background:transparent;cursor:pointer;font-size:10px;font-weight:700;text-transform:uppercase">
+        <option value="pending" ${item.status==='pending'?'selected':''}>Pending</option>
+        <option value="approved" ${item.status==='approved'?'selected':''}>Approved</option>
+        <option value="rejected" ${item.status==='rejected'?'selected':''}>Rejected</option>
+      </select>
+      <button class="hist-del" onclick="removeTrackerItem(${i})">✕</button>`;
+    list.appendChild(el);
+  });
+}
+
+function addTrackerItem() {
+  const text = document.getElementById('trackerItem').value.trim();
+  const status = document.getElementById('trackerStatus').value;
+  if (!text) return;
+  trackerItems.push({text, status, addedAt: Date.now()});
+  localStorage.setItem('dgm_tracker', JSON.stringify(trackerItems));
+  document.getElementById('trackerItem').value = '';
+  renderTrackerList();
+}
+
+function updateTrackerStatus(i, status) {
+  trackerItems[i].status = status;
+  localStorage.setItem('dgm_tracker', JSON.stringify(trackerItems));
+  renderTrackerList();
+}
+
+function removeTrackerItem(i) {
+  trackerItems.splice(i,1);
+  localStorage.setItem('dgm_tracker', JSON.stringify(trackerItems));
+  renderTrackerList();
+}
+
+function clearTracker() {
+  if (!confirm('Clear all tracker items?')) return;
+  trackerItems = [];
+  localStorage.setItem('dgm_tracker', JSON.stringify(trackerItems));
+  renderTrackerList();
+}
+
+async function extractTrackerFromDocs() {
+  const fileMemory = await dbGetAllFiles();
+  const files = Object.keys(fileMemory);
+  if (!files.length) { alert('No documents in memory. Upload files first.'); return; }
+  closeModal('trackerModal');
+  const q = 'Extract all pending approvals, action items, and tasks from the stored documents. For each item, indicate if it is Pending, Approved, or Rejected. Format as a list.';
+  document.getElementById('userInput').value = q;
+  sendMessage();
+}
+</script>
+
+</body>
+</html>
